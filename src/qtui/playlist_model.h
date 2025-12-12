@@ -42,14 +42,14 @@ public:
         Length,
         Path,
         Filename,
-        Created,
-        Modified,
         CustomTitle,
         Bitrate,
         Comment,
         Publisher,
         CatalogNum,
         Disc,
+        FileCreated,
+        FileModified,
         n_cols
     };
 

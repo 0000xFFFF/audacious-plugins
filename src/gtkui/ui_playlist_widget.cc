@@ -17,8 +17,6 @@
  * the use of this software.
  */
 
-#include <string.h>
-#include <time.h>
 #include <gtk/gtk.h>
 
 #include <libaudcore/audstrings.h>
@@ -48,14 +46,14 @@ static const GType pw_col_types[PW_COLS] =
     G_TYPE_STRING,  // length
     G_TYPE_STRING,  // path
     G_TYPE_STRING,  // file name
-    G_TYPE_STRING,  // created
-    G_TYPE_STRING,  // modified
     G_TYPE_STRING,  // custom title
     G_TYPE_STRING,  // bitrate
     G_TYPE_STRING,  // comment
     G_TYPE_STRING,  // publisher
     G_TYPE_STRING,  // catalog number
-    G_TYPE_STRING   // disc
+    G_TYPE_STRING,  // disc
+    G_TYPE_STRING,  // file created
+    G_TYPE_STRING   // file modified
 };
 
 static const int pw_col_min_widths[PW_COLS] = {
@@ -71,14 +69,14 @@ static const int pw_col_min_widths[PW_COLS] = {
     7,   // length
     10,  // path
     10,  // file name
-    10,  // created
-    10,  // modified
     10,  // custom title
     3,   // bitrate
     10,  // comment,
     10,  // publisher
     3,   // catalog number
-    2    // disc
+    2,   // disc
+    10,  // file created
+    10   // file modified
 };
 
 static const bool pw_col_label[PW_COLS] = {
@@ -94,14 +92,14 @@ static const bool pw_col_label[PW_COLS] = {
     false,  // length
     true,   // path
     true,   // file name
-    true,   // created
-    true,   // modified
     true,   // custom title
     false,  // bitrate
     true,   // comment
     true,   // publisher
     false,  // catalog number
-    false   // disc
+    false,  // disc
+    true,   // file created
+    true,   // file modified
 };
 
 static const Playlist::SortType pw_col_sort_types[PW_COLS] = {
@@ -117,14 +115,14 @@ static const Playlist::SortType pw_col_sort_types[PW_COLS] = {
     Playlist::Length,          // length
     Playlist::Path,            // path
     Playlist::Filename,        // file name
-    Playlist::Created,         // created
-    Playlist::Modified,        // modified
     Playlist::FormattedTitle,  // custom title
     Playlist::n_sort_types,    // bitrate
     Playlist::Comment,         // comment
     Playlist::Publisher,       // publisher
     Playlist::CatalogNum,      // catalog number
-    Playlist::Disc             // disc
+    Playlist::Disc,            // disc
+    Playlist::FileCreated,     // file created
+    Playlist::FileModified,    // file modified
 };
 
 struct PlaylistWidgetData
@@ -151,13 +149,15 @@ static void set_int_from_tuple (GValue * value, const Tuple & tuple, Tuple::Fiel
 
 static void set_datetime_from_tuple (GValue * value, const Tuple & tuple, Tuple::Field field)
 {
-    time_t t = tuple.get_dt (field);
-    if (t > 0) {
-        struct tm tm_val;
-        char buf[64];
-        localtime_r (&t, &tm_val);
-        strftime (buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", &tm_val);
-        g_value_set_string (value, buf);
+    int64_t t = (int64_t) tuple.get_int64 (field);
+
+    if (t > 0)
+    {
+        GDateTime * dt = g_date_time_new_from_unix_local(t);
+        gchar * str = g_date_time_format(dt, "%c");  // locale default date+time
+        g_value_set_string(value, str);
+        g_free(str);
+        g_date_time_unref(dt);
     }
     else
         g_value_set_string (value, "");
@@ -248,12 +248,6 @@ static void get_value (void * user, int row, int column, GValue * value)
     case PW_COL_PATH:
         set_string_from_tuple (value, tuple, Tuple::Path);
         break;
-    case PW_COL_CREATED:
-        set_datetime_from_tuple (value, tuple, Tuple::Created);
-        break;
-    case PW_COL_MODIFIED:
-        set_datetime_from_tuple (value, tuple, Tuple::Modified);
-        break;
     case PW_COL_CUSTOM:
         set_string_from_tuple (value, tuple, Tuple::FormattedTitle);
         break;
@@ -271,6 +265,12 @@ static void get_value (void * user, int row, int column, GValue * value)
         break;
     case PW_COL_DISC:
         set_int_from_tuple (value, tuple, Tuple::Disc);
+        break;
+    case PW_COL_FILE_CREATED:
+        set_datetime_from_tuple (value, tuple, Tuple::FileCreated);
+        break;
+    case PW_COL_FILE_MODIFIED:
+        set_datetime_from_tuple (value, tuple, Tuple::FileModified);
         break;
     }
 }

@@ -45,14 +45,14 @@ const char * const pw_col_names[PW_COLS] = {
     N_("Length"),
     N_("File Path"),
     N_("File Name"),
-    N_("File Created"),
-    N_("File Modified"),
     N_("Custom Title"),
     N_("Bitrate"),
     N_("Comment"),
     N_("Publisher"),
     N_("Catalog Number"),
-    N_("Disc")
+    N_("Disc"),
+    N_("File Created"),
+    N_("File Modified")
 };
 
 int pw_num_cols;
@@ -72,14 +72,14 @@ static const char * const pw_col_keys[PW_COLS] = {
     "length",
     "path",
     "filename",
-    "created",
-    "modified",
     "custom",
     "bitrate",
     "comment",
     "publisher",
     "catalog-number",
-    "disc"
+    "disc",
+    "file-created",
+    "file-modified",
 };
 
 static const int pw_default_widths[PW_COLS] = {
@@ -95,14 +95,14 @@ static const int pw_default_widths[PW_COLS] = {
     10,   // length
     275,  // path
     275,  // filename
-    50,   // created
-    50,   // modified
     275,  // custom title
     10,   // bitrate
     275,  // comment
     175,  // publisher
     75,   // catalog number
-    10    // disc
+    10,   // disc
+    50,   // file created
+    50,   // file modified
 };
 
 void pw_col_init ()
