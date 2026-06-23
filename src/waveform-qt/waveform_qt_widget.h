@@ -37,7 +37,7 @@ private:
     static const QColor line_color;
 
     QLinearGradient waveform_pattern;
-    QLinearGradient background_vumeter_pattern;
+    QLinearGradient background_waveform_pattern;
     float legend_width;
     float waveform_height;
     float waveform_width;
