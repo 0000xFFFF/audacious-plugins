@@ -20,6 +20,7 @@
 
 #include <math.h>
 
+#include <QMouseEvent>
 #include <QPainter>
 #include <QWidget>
 
@@ -38,6 +39,7 @@ public:
 protected:
     void resizeEvent(QResizeEvent *) override;
     void paintEvent(QPaintEvent *) override;
+    void mousePressEvent(QMouseEvent * event) override;
 
 private:
     void paint_background(QPainter &);
@@ -82,6 +84,14 @@ void WaveformWidget::paintEvent(QPaintEvent * event)
 
     paint_background(p);
     paint_spectrum(p);
+}
+
+void WaveformWidget::mousePressEvent(QMouseEvent * event)
+{
+    int x = event->pos().x();
+    int y = event->pos().y();
+
+    printf("clicked: %d %d\n", x, y);
 }
 
 class QtWaveform : public VisPlugin
