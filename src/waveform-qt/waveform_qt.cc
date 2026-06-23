@@ -18,72 +18,103 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "waveform_qt.h"
-#include "waveform_qt_widget.h"
+#include <math.h>
 
-#include <QPointer>
+#include <QPainter>
+#include <QWidget>
+
+#include <libaudcore/hook.h>
+#include <libaudcore/i18n.h>
 #include <libaudcore/interface.h>
-#include <libaudcore/runtime.h>
+#include <libaudcore/plugin.h>
+#include <libaudqt/libaudqt.h>
 
-EXPORT WaveformQt aud_plugin_instance;
+class WaveformWidget : public QWidget
+{
+public:
+    WaveformWidget(QWidget * parent = nullptr);
+    ~WaveformWidget();
 
-const char WaveformQt::about[] = N_("Waveform Plugin for Audacious\n"
-                                    "Copyright 2026 0000xFFFF");
+protected:
+    void resizeEvent(QResizeEvent *) override;
+    void paintEvent(QPaintEvent *) override;
 
-const PreferencesWidget WaveformQt::widgets[] = {
-    WidgetLabel(N_("<b>Waveform Settings</b>")),
-    WidgetSpin(N_("Peak hold time:"), WidgetFloat("waveform", "peak_hold_time"),
-               {0.1, 30, 0.1, N_("seconds")}),
-    WidgetSpin(N_("Fall-off time:"), WidgetFloat("waveform", "falloff"),
-               {0.1, 96, 0.1, N_("dB/second")}),
-    WidgetCheck(N_("Display legend"), WidgetBool("waveform", "display_legend",
-                                                 toggle_display_legend)),
+private:
+    void paint_background(QPainter &);
+    void paint_spectrum(QPainter &);
 };
 
-const PluginPreferences WaveformQt::prefs = {{widgets}};
+static WaveformWidget * spect_widget = nullptr;
 
-const char * const WaveformQt::prefs_defaults[] = {nullptr};
+WaveformWidget::WaveformWidget(QWidget * parent) : QWidget(parent) {}
 
-static QPointer<WaveformQtWidget> spect_widget;
+WaveformWidget::~WaveformWidget() { spect_widget = nullptr; }
 
-bool WaveformQt::init()
+void WaveformWidget::paint_background(QPainter & p)
 {
-    aud_config_set_defaults("waveform", prefs_defaults);
-    return true;
+    auto & base = palette().color(QPalette::Window);
+    p.fillRect(0, 0, width(), height(), base);
 }
 
-void WaveformQt::render_multi_pcm(const float * pcm, int channels)
+void WaveformWidget::paint_spectrum(QPainter & p)
 {
-    if (spect_widget)
+    auto & fg = palette().color(QPalette::WindowText);
+
+    p.setPen(fg);
+
+    int w = width();
+    int h = height();
+
+    for (int i = 0; i < w; i++)
     {
-        spect_widget->render_multi_pcm(pcm, channels);
+        float x = (float)i / w;
+        float y = 0.5f * (1.0f + sinf(2 * M_PI * x));
+        int y_pixel = h - (int)(y * h);
+        p.drawLine(i, h, i, y_pixel);
     }
 }
 
-void WaveformQt::clear()
+void WaveformWidget::resizeEvent(QResizeEvent * event) { update(); }
+
+void WaveformWidget::paintEvent(QPaintEvent * event)
+{
+    QPainter p(this);
+
+    paint_background(p);
+    paint_spectrum(p);
+}
+
+class QtWaveform : public VisPlugin
+{
+public:
+    static constexpr PluginInfo info = {N_("Waveform"), PACKAGE,
+                                        nullptr, // about
+                                        nullptr, // prefs
+                                        PluginQtOnly};
+
+    constexpr QtWaveform() : VisPlugin(info, Visualizer::Freq) {}
+
+    void * get_qt_widget() override;
+
+    void clear() override;
+    void render_freq(const float * freq) override;
+};
+
+EXPORT QtWaveform aud_plugin_instance;
+
+void QtWaveform::render_freq(const float * freq) {}
+
+void QtWaveform::clear()
 {
     if (spect_widget)
-    {
-        spect_widget->reset();
         spect_widget->update();
-    }
 }
 
-void * WaveformQt::get_qt_widget()
+void * QtWaveform::get_qt_widget()
 {
     if (spect_widget)
-    {
         return spect_widget;
-    }
 
-    spect_widget = new WaveformQtWidget();
+    spect_widget = new WaveformWidget();
     return spect_widget;
-}
-
-void WaveformQt::toggle_display_legend()
-{
-    if (spect_widget)
-    {
-        spect_widget->toggle_display_legend();
-    }
 }
