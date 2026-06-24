@@ -16,23 +16,12 @@
  * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
  * IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
- *
- * --- Integration notes ---
- * The decode logic here is mp3_to_bmp.c's libavformat/libavcodec/
- * libswresample pipeline, ported in as decode_peaks(). The key design
- * point for "resize doesn't freeze": decoding happens ONCE per track, on
- * a background std::thread, into a FIXED-resolution envelope (NUM_BUCKETS
- * columns) that gets cached to disk. paintEvent() and resizeEvent() never
- * touch libav at all -- they just resample the existing in-memory array to
- * whatever the widget's current pixel width happens to be, which is O(width)
- * and effectively instant. Resizing the dock is therefore just a repaint,
- * never a re-decode.
  */
 
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
-#include <libintl.h> /* must come before libaudcore/i18n.h: see note below */
+#include <libintl.h> /* must come before libaudcore/i18n.h to prevent macro-poisoning */
 #include <math.h>
 #include <pthread.h>
 #include <sys/stat.h>
@@ -47,7 +36,7 @@
 #include <libaudcore/audstrings.h>
 #include <libaudcore/drct.h>
 #include <libaudcore/hook.h>
-#include <libaudcore/i18n.h> /* fine here now that real libintl.h was already parsed above */
+#include <libaudcore/i18n.h>
 #include <libaudcore/interface.h>
 #include <libaudcore/plugin.h>
 #include <libaudcore/runtime.h>
