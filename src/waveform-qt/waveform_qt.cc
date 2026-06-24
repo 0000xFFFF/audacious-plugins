@@ -51,8 +51,6 @@ extern "C" {
 
 #define NUM_BUCKETS 2000
 
-/* ================= peak data + decode ================= */
-
 struct TrackPeaks
 {
     int16_t * mins;
@@ -340,14 +338,9 @@ static bool decode_peaks(const char * filename, TrackPeaks * out)
     return true;
 }
 
-/* ================= background loading ================= */
-
 class WaveformWidget;
 static WaveformWidget * spect_widget = nullptr;
-
 static void load_track_async(const char * filename);
-
-/* ================= widget ================= */
 
 class WaveformWidget : public QWidget
 {
@@ -519,8 +512,7 @@ void WaveformWidget::mouseMoveEvent(QMouseEvent * event)
         seek_to_x(event->pos().x());
 }
 
-/* ================= async loader thread helper ================= */
-
+// async loader thread helper
 static void * worker_thread_func(void * arg)
 {
     char * filename = (char *)arg;
@@ -598,8 +590,6 @@ static void on_playback_ready(void *, void *)
     if (fn)
         load_track_async((const char *)fn);
 }
-
-/* ================= plugin glue ================= */
 
 class QtWaveform : public VisPlugin
 {
