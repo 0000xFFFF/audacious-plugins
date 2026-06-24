@@ -553,7 +553,7 @@ static void * worker_thread_func(void * arg)
     if (!ok)
     {
         delete peaks;
-        delete[] filename;
+        free(filename);
         return nullptr;
     }
 
@@ -573,11 +573,11 @@ static void * worker_thread_func(void * arg)
                 g_peaks = peaks;
                 pthread_mutex_unlock(&g_mutex);
             }
-            delete[] fn_copy;
+            free(fn_copy);
         },
         Qt::QueuedConnection);
 
-    delete[] filename;
+    free(filename);
     return nullptr;
 }
 
@@ -599,7 +599,7 @@ static void load_track_async(const char * filename)
     }
     else
     {
-        delete[] fn_arg;
+        free(fn_arg);
     }
 }
 
