@@ -48,6 +48,7 @@
 #include <QTimer>
 #include <QWidget>
 
+#include <libaudcore/audstrings.h>
 #include <libaudcore/drct.h>
 #include <libaudcore/hook.h>
 #include <libaudcore/i18n.h> /* fine here now that real libintl.h was already parsed above */
@@ -490,7 +491,11 @@ static void load_track_async(std::string filename)
         bool ok = load_cache(cpath, *peaks);
         if (!ok)
         {
-            ok = decode_peaks(filename, *peaks);
+            StringBuf local = uri_to_filename(filename.c_str());
+            std::string decode_path =
+                local ? std::string((const char *)local) : filename;
+
+            ok = decode_peaks(decode_path, *peaks);
             if (ok)
                 save_cache(cpath, *peaks);
         }
