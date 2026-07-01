@@ -30,6 +30,16 @@
 
 #include <libaudcore/runtime.h>
 
+/* Uncomment to split bands via a per-bucket FFT instead of the cheap
+ * one-pole filters below. More accurate separation (a real brickwall
+ * in the frequency domain instead of a soft RC-style rolloff), at the
+ * cost of one forward transform per bucket during decode. */
+//#define USE_FFT
+
+#ifdef USE_FFT
+#include <complex>
+#endif
+
 extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
@@ -152,6 +162,150 @@ void pump_frame(AVFrame * fr, PumpContext * ctx)
     }
 }
 
+#ifdef USE_FFT
+
+using cplex = std::complex<float>;
+
+/* In-place iterative radix-2 decimation-in-time FFT. `a.size()` must
+ * be a power of two. */
+void fft_inplace(std::vector<cplex> & a)
+{
+    size_t n = a.size();
+
+    for (size_t i = 1, j = 0; i < n; i++)
+    {
+        size_t bit = n >> 1;
+        for (; j & bit; bit >>= 1)
+            j ^= bit;
+        j ^= bit;
+        if (i < j)
+            std::swap(a[i], a[j]);
+    }
+
+    for (size_t len = 2; len <= n; len <<= 1)
+    {
+        float ang = -2.0f * (float)M_PI / (float)len;
+        cplex wlen(cosf(ang), sinf(ang));
+        for (size_t i = 0; i < n; i += len)
+        {
+            cplex w(1.0f, 0.0f);
+            for (size_t k = 0; k < len / 2; k++)
+            {
+                cplex u = a[i + k];
+                cplex v = a[i + k + len / 2] * w;
+                a[i + k] = u + v;
+                a[i + k + len / 2] = u - v;
+                w *= wlen;
+            }
+        }
+    }
+}
+
+size_t next_pow2(size_t n)
+{
+    size_t p = 1;
+    while (p < n)
+        p <<= 1;
+    return p;
+}
+
+/* Splits the mono signal into bass/mid/treble by running a windowed
+ * FFT over the samples inside each bucket and summing spectral
+ * magnitude into whichever band each bin's frequency falls in. Gives
+ * a sharp, real frequency-domain crossover instead of the one-pole
+ * filters' soft rolloff, at the cost of a transform per bucket.
+ * Normalizes against a shared track-wide max, same as the one-pole
+ * path, so quiet hi-hats show up just as vividly as loud bass. */
+void compute_band_peaks(const int16_t * samples, size_t count, int sample_rate,
+                        int num_buckets, uint8_t * low_out, uint8_t * mid_out,
+                        uint8_t * high_out)
+{
+    const float fc_low = 250.0f; /* below this = "low" band */
+    const float fc_high =
+        4000.0f; /* above this = "high" band; in between = "mid" */
+
+    std::vector<float> low_peak(num_buckets, 0.0f);
+    std::vector<float> mid_peak(num_buckets, 0.0f);
+    std::vector<float> high_peak(num_buckets, 0.0f);
+
+    std::vector<cplex> buf;
+
+    for (int b = 0; b < num_buckets; b++)
+    {
+        size_t start = (size_t)((double)b / num_buckets * count);
+        size_t end = (size_t)((double)(b + 1) / num_buckets * count);
+        if (end > count)
+            end = count;
+        if (end <= start)
+            end = start + 1;
+        if (end > count)
+            end = count;
+
+        size_t bucket_n = end - start;
+        size_t fft_n = next_pow2(bucket_n);
+        if (fft_n < 2)
+            fft_n = 2;
+
+        buf.assign(fft_n, cplex(0.0f, 0.0f));
+        for (size_t i = 0; i < bucket_n; i++)
+        {
+            /* Hann window to tame spectral leakage from the hard
+             * bucket-boundary edges */
+            float w = 0.5f - 0.5f * cosf(2.0f * (float)M_PI * i /
+                                        (bucket_n > 1 ? (float)(bucket_n - 1)
+                                                      : 1.0f));
+            buf[i] = cplex((float)samples[start + i] * w, 0.0f);
+        }
+
+        fft_inplace(buf);
+
+        float low_sum = 0.0f, mid_sum = 0.0f, high_sum = 0.0f;
+
+        /* real input -> conjugate-symmetric spectrum, so only the
+         * first half carries independent information; skip DC (k=0) */
+        for (size_t k = 1; k < fft_n / 2; k++)
+        {
+            float freq = (float)k * sample_rate / (float)fft_n;
+            float mag = std::abs(buf[k]);
+            if (freq < fc_low)
+                low_sum += mag;
+            else if (freq > fc_high)
+                high_sum += mag;
+            else
+                mid_sum += mag;
+        }
+
+        low_peak[b] = low_sum;
+        mid_peak[b] = mid_sum;
+        high_peak[b] = high_sum;
+    }
+
+    /* IMPORTANT: normalize against ONE shared max across all three bands,
+     * not each band's own max independently. Per-band normalization would
+     * make a pure bass tone's tiny mid/high residual energy *also* read
+     * as "fully lit" -- which defeats the purpose: we want color to
+     * reflect which band actually dominates at a given moment. */
+    float shared_max = 1.0f;
+    for (int b = 0; b < num_buckets; b++)
+    {
+        if (low_peak[b] > shared_max)
+            shared_max = low_peak[b];
+        if (mid_peak[b] > shared_max)
+            shared_max = mid_peak[b];
+        if (high_peak[b] > shared_max)
+            shared_max = high_peak[b];
+    }
+
+    for (int b = 0; b < num_buckets; b++)
+    {
+        low_out[b] = (uint8_t)(255.0f * low_peak[b] / shared_max);
+        mid_out[b] = (uint8_t)(255.0f * mid_peak[b] / shared_max);
+        high_out[b] = (uint8_t)(255.0f * high_peak[b] / shared_max);
+    }
+}
+
+#else
+
 /* Splits the mono signal into bass/mid/treble via two simple one-pole
  * filters (cheap, stable, no FFT needed -- this is the same order of
  * rigor as the bass/mid/treble split used in most cheap VU-style
@@ -223,6 +377,8 @@ void compute_band_peaks(const int16_t * samples, size_t count, int sample_rate,
         high_out[b] = (uint8_t)(255.0f * high_peak[b] / shared_max);
     }
 }
+
+#endif // USE_FFT
 
 } // namespace
 
