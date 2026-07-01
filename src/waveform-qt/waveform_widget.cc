@@ -20,9 +20,9 @@
 
 #include "waveform_widget.h"
 
+#include <cmath>
 #include <cstdlib>
 
-#include <QCoreApplication>
 #include <QMetaObject>
 #include <QMouseEvent>
 #include <QPainter>
@@ -34,6 +34,16 @@
 #include "preload.h"
 #include "track_peaks.h"
 #include "track_state.h"
+
+/* Uncomment to color each column by its OWN low/mid/high energy
+ * ratio (normalized to sum to 1, then gamma-corrected) instead of
+ * the shared-track-max normalization used by default. This makes
+ * color fully saturated everywhere, including near-silent passages,
+ * since it answers "which band dominates this instant" rather than
+ * "how energetic is this instant" -- the classic Mixxx-style RGB
+ * waveform look. Bar height still comes from real sample amplitude
+ * either way, so seeking/scrubbing stays readable. */
+#define ALT_PAINT_MODE
 
 static WaveformWidget * spect_widget = nullptr;
 static QWidget * g_container = nullptr;
@@ -95,8 +105,10 @@ void WaveformWidget::paint_waveform(QPainter & p)
 
     p.setPen(Qt::NoPen);
 
+#ifndef ALT_PAINT_MODE
     /* keep quiet bands faintly visible rather than pure black */
     const int floor_c = 40;
+#endif
 
     for (int x = 0; x < w; x++)
     {
@@ -113,9 +125,20 @@ void WaveformWidget::paint_waveform(QPainter & p)
         }
 
         /* low -> red, mid -> green, high -> blue, the same convention */
+#ifdef ALT_PAINT_MODE
+        double lo = local_peaks.low[idx];
+        double mi = local_peaks.mid[idx];
+        double hi = local_peaks.high[idx];
+        double sum = lo + mi + hi + 1e-9;
+
+        int r = (int)(255.0 * pow(lo / sum, 0.6));
+        int g = (int)(255.0 * pow(mi / sum, 0.6));
+        int b = (int)(255.0 * pow(hi / sum, 0.6));
+#else
         int r = floor_c + (255 - floor_c) * local_peaks.low[idx] / 255;
         int g = floor_c + (255 - floor_c) * local_peaks.mid[idx] / 255;
         int b = floor_c + (255 - floor_c) * local_peaks.high[idx] / 255;
+#endif
 
         p.setBrush(QColor(r, g, b));
         p.drawRect(QRectF(x, top, 1.0, bot - top + 1.0));
