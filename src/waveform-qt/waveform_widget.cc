@@ -43,7 +43,7 @@
  * "how energetic is this instant" -- the classic Mixxx-style RGB
  * waveform look. Bar height still comes from real sample amplitude
  * either way, so seeking/scrubbing stays readable. */
-#define ALT_PAINT_MODE
+// #define ALT_PAINT_MODE
 
 static WaveformWidget * spect_widget = nullptr;
 static QWidget * g_container = nullptr;

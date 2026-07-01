@@ -34,7 +34,7 @@
  * one-pole filters below. More accurate separation (a real brickwall
  * in the frequency domain instead of a soft RC-style rolloff), at the
  * cost of one forward transform per bucket during decode. */
-//#define USE_FFT
+#define USE_FFT
 
 #ifdef USE_FFT
 #include <complex>
@@ -101,8 +101,14 @@ bool load_cache(const char * path, TrackPeaks * out)
     return ok;
 }
 
+#define DONT_SAVE_CACHE
+
 void save_cache(const char * path, const TrackPeaks * in)
 {
+#ifdef DONT_SAVE_CACHE
+    return;
+#endif
+
     FILE * f = fopen(path, "wb");
     if (!f)
         return;
@@ -252,8 +258,8 @@ void compute_band_peaks(const int16_t * samples, size_t count, int sample_rate,
             /* Hann window to tame spectral leakage from the hard
              * bucket-boundary edges */
             float w = 0.5f - 0.5f * cosf(2.0f * (float)M_PI * i /
-                                        (bucket_n > 1 ? (float)(bucket_n - 1)
-                                                      : 1.0f));
+                                         (bucket_n > 1 ? (float)(bucket_n - 1)
+                                                       : 1.0f));
             buf[i] = cplex((float)samples[start + i] * w, 0.0f);
         }
 
